@@ -1,0 +1,6 @@
+streamlit
+opencv-python
+Pillow
+mysql-connector-python
+bcrypt
+pytest

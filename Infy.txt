@@ -1,0 +1,59 @@
+AI-Powered image stylization and cartoonization platform
+
+firebase
+
+AI Tools:
+Kira
+chatgpt-prompt
+claude-code
+
+first vscode then kira if needed.
+
+
+1. Project Title: AI-Powered Image Stylization and Cartoonization Platform
+2. Project Statement and Outcomes:
+The AI-Powered Image Stylization and Cartoonization Platform project aims to develop an interactive application that converts real-world images into various cartoon-style effects using OpenCV. This project involves implementing advanced image processing techniques such as edge detection, bilateral filtering, color quantization, and stylization filters to achieve different visual transformations like cartoon, sketch, and pencil color effects.
+The outcome will be a user-friendly Streamlit-based web application where users can upload images and instantly transform them into selected cartoon styles. The application will include features like filter selection and side-by-side image comparison (original vs cartoonized) for better visualization. It will cater to general users, artists, and digital content creators. The project will conclude with thorough testing to ensure performance, usability, and reliability, supported by well-documented reports for future improvements.
+
+OPENCV
+edge detect
+blur
+
+FRAMEWORK
+streamlit-best for now
+react.js
+
+username password
+save pass
+history of img processed
+payment processed
+
+DATABASE
+SQLite
+MYSQL
+PostgreSQL (industry)
+
+PAYMENT GATEWAY
+payment industry security standards
+razorpay(india)-best for now
+stripe
+
+learn git and GitHub
+
+prj flow
+open and create acc py handles data and store in db
+py checks credential
+upload img
+select style
+py processes
+OpenCV
+display both before and after images
+click pay and download
+req to razorpay
+app and payment processed
+payment recored in db by py
+and then download button enabled.
+
+DATABASE_URL="mysql+pymysql://root:sabibaa%4028@127.0.0.1:3306/ai_cartoon_db"
+
+https://docs.google.com/spreadsheets/d/1DdihmaGPuskt70MySMAeGOxmtBk6cW-bvBXu5F2JG1E/edit?gid=0&authuser=1#gid=0
