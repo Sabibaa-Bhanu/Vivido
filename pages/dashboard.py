@@ -353,6 +353,13 @@ body::before {
 """, unsafe_allow_html=True)
 
 # Check if user is logged in
+if (
+    not st.session_state.get("logged_in")
+    and st.session_state.get("user_id")
+    and st.session_state.get("current_user")
+):
+    st.session_state["logged_in"] = True
+
 if not st.session_state.get("logged_in"):
     st.warning("Please login first")
     st.page_link("pages/login.py", label="Go to Login")
@@ -408,15 +415,15 @@ st.markdown(f"""
         <p class="welcome-subtitle">Your personalized image styling platform.</p>
     </div>
     <div class="nav-menu">
-        <a class="nav-link" href="#image-processing">Image Processing</a>
+        <a class="nav-link" href="#image-processing-card">Image Processing</a>
         <a class="nav-link" href="#payment-history">Payment History</a>
         <a class="nav-link" href="#profile-settings">Profile Settings</a>
     </div>
     <div class="section-grid">
-        <div id="image-processing" class="section-card">
+        <div id="image-processing-card" class="section-card">
             <div class="section-title">Image Processing</div>
             <div class="section-desc">
-                Start new stylization jobs, review recent outputs, and manage queued tasks.
+                Open the Image Processing page to upload images and start stylization.
             </div>
         </div>
         <div id="payment-history" class="section-card">
@@ -435,8 +442,10 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-
-
+col_img_1, col_img_2, col_img_3 = st.columns([1, 1, 1])
+with col_img_2:
+    if st.button("Open Image\nProcessing", key="open_image_processing_btn", use_container_width=True):
+        st.switch_page("pages/image_processing.py")
 
 # Delete Account Button
 col1, col2, col3 = st.columns([1, 1, 1])

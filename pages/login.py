@@ -61,6 +61,17 @@ def _set_query_params(**kwargs):
             st.query_params[key] = value
 
 
+def _resolve_next_page(raw_next: str) -> str:
+    next_value = (raw_next or "").strip().lower()
+    allowed_targets = {
+        "dashboard": "pages/dashboard.py",
+        "image_processing": "pages/image_processing.py",
+        "pages/dashboard.py": "pages/dashboard.py",
+        "pages/image_processing.py": "pages/image_processing.py",
+    }
+    return allowed_targets.get(next_value, "")
+
+
 form_html = r"""
 <!doctype html>
 <html>
@@ -621,6 +632,7 @@ form_html = r"""
       const initialMessageText = __INITIAL_MESSAGE_TEXT__;
       const isNotFound = __INITIAL_NOT_FOUND__;
       const justLoggedOut = __JUST_LOGGED_OUT__;
+      const nextParam = __NEXT_PARAM__;
 
       if (justLoggedOut) {
         localStorage.removeItem('vividoRememberEnabled');
@@ -728,7 +740,8 @@ form_html = r"""
         submitBtn.disabled = true;
         submitBtn.textContent = 'Signing In...';
 
-        window.location.href = `?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}&remember=${remember ? '1' : '0'}`;
+        const nextQuery = nextParam ? `&next=${encodeURIComponent(nextParam)}` : '';
+        window.location.href = `?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}&remember=${remember ? '1' : '0'}${nextQuery}`;
       });
 
       (function restoreRememberedLogin() {
@@ -817,11 +830,14 @@ form_html = r"""
 
 # Handle form submission
 query_params = _get_query_params()
+next_param = query_params.get("next", [""])[0]
+next_page = _resolve_next_page(next_param) or _resolve_next_page(st.session_state.get("redirect_after_login", ""))
 
 # Check if already logged in
 if st.session_state.get("logged_in"):
-    st.page_link("pages/dashboard.py", label="Go to Dashboard")
-    st.stop()
+    target_page = next_page or "pages/dashboard.py"
+    st.session_state.pop("redirect_after_login", None)
+    st.switch_page(target_page)
 
 if "action" in query_params and query_params["action"][0] == "login":
     email = urllib.parse.unquote(query_params.get("email", [""])[0]).strip().lower()
@@ -839,8 +855,10 @@ if "action" in query_params and query_params["action"][0] == "login":
             st.session_state["last_login"] = result.get("last_login")
             
             # Clear params and redirect immediately
+            target_page = next_page or "pages/dashboard.py"
+            st.session_state.pop("redirect_after_login", None)
             _set_query_params()
-            st.switch_page("pages/dashboard.py")
+            st.switch_page(target_page)
         else:
             # Handle different error types
             is_user_not_found = result.get("user_not_found", False)
@@ -877,6 +895,7 @@ rendered_form_html = (
     .replace("__INITIAL_MESSAGE_TEXT__", json.dumps(message_text))
     .replace("__INITIAL_NOT_FOUND__", json.dumps(False))
     .replace("__JUST_LOGGED_OUT__", json.dumps(bool(st.session_state.pop("just_logged_out", False))))
+    .replace("__NEXT_PARAM__", json.dumps(next_param))
 )
 
 # Render the form
