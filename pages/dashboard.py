@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import datetime
 from backend.user_management import delete_user
 
-st.set_page_config(page_title="Dashboard - Vivido", layout="wide")
+st.set_page_config(page_title="Dashboard - Vivido",page_icon="assets/logo/dashboard.jpeg", layout="wide")
 
 # Initialize delete confirmation state
 if "show_delete_confirmation" not in st.session_state:
@@ -214,6 +214,7 @@ body::before {
     background: rgba(124, 58, 237, 0.12);
     font-weight: 600;
     transition: all 0.25s ease;
+    cursor: pointer;
 }
 
 .nav-link:hover {
@@ -229,10 +230,74 @@ body::before {
 }
 
 .section-card {
+    display: block;
+    width: 100%;
     background: linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(124, 58, 237, 0.08));
     border: 1px solid rgba(6, 182, 212, 0.25);
     border-radius: 16px;
     padding: 24px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-decoration: none;
+    color: inherit;
+    text-align: left;
+}
+
+.section-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(6, 182, 212, 0.45);
+}
+
+.section-card:focus-visible {
+    outline: 2px solid rgba(6, 182, 212, 0.6);
+    outline-offset: 3px;
+}
+
+.st-key-card_image_processing button,
+.st-key-card_payment_history button,
+.st-key-card_profile_settings button {
+    min-height: 220px;
+    width: 100%;
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(124, 58, 237, 0.08));
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 16px;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 24px;
+    line-height: 1.5;
+    white-space: normal;
+    font-size: 0.98rem;
+}
+
+.st-key-card_image_processing button p,
+.st-key-card_payment_history button p,
+.st-key-card_profile_settings button p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.98rem;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.st-key-card_image_processing button p strong,
+.st-key-card_payment_history button p strong,
+.st-key-card_profile_settings button p strong {
+    display: block;
+    margin-bottom: 10px;
+    color: #ffffff;
+    font-weight: 900;
+    font-size: 1.5rem;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    text-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+}
+
+.st-key-card_image_processing button:hover,
+.st-key-card_payment_history button:hover,
+.st-key-card_profile_settings button:hover {
+    transform: translateY(-2px);
+    border-color: rgba(6, 182, 212, 0.45);
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(124, 58, 237, 0.14));
 }
 
 .section-title {
@@ -365,6 +430,18 @@ if not st.session_state.get("logged_in"):
     st.page_link("pages/login.py", label="Go to Login")
     st.stop()
 
+query_params = st.query_params
+action = query_params.get("action", "")
+if action == "open_image_processing":
+    st.query_params.clear()
+    st.switch_page("pages/image_processing.py")
+if action == "open_payment_history":
+    st.info("Payment History page is coming soon.")
+    st.query_params.clear()
+if action == "open_profile_settings":
+    st.info("Profile Settings page is coming soon.")
+    st.query_params.clear()
+
 last_login_value = st.session_state.get("last_login")
 last_login_display = "N/A"
 if last_login_value:
@@ -399,7 +476,7 @@ st.markdown(f"""
 # Logout button
 col1, col2, col3 = st.columns([1, 1, 1])
 with col3:
-    if st.button("🔓 Logout", key="logout_btn", help="Click to logout and return to login page", use_container_width=True):
+    if st.button("🔓 Logout", key="logout_btn", help="Click to logout and return to login page", width='stretch'):
         st.session_state.clear()
         st.session_state["just_logged_out"] = True
         st.switch_page("pages/login.py")
@@ -414,43 +491,38 @@ st.markdown(f"""
         <h1 class="welcome-title">Welcome back, {username}</h1>
         <p class="welcome-subtitle">Your personalized image styling platform.</p>
     </div>
-    <div class="nav-menu">
-        <a class="nav-link" href="#image-processing-card">Image Processing</a>
-        <a class="nav-link" href="#payment-history">Payment History</a>
-        <a class="nav-link" href="#profile-settings">Profile Settings</a>
-    </div>
-    <div class="section-grid">
-        <div id="image-processing-card" class="section-card">
-            <div class="section-title">Image Processing</div>
-            <div class="section-desc">
-                Open the Image Processing page to upload images and start stylization.
-            </div>
-        </div>
-        <div id="payment-history" class="section-card">
-            <div class="section-title">Payment History</div>
-            <div class="section-desc">
-                Track invoices, subscriptions, and billing activity for your account.
-            </div>
-        </div>
-        <div id="profile-settings" class="section-card">
-            <div class="section-title">Profile Settings</div>
-            <div class="section-desc">
-                Update your profile, change credentials, and manage notification preferences.
-            </div>
-        </div>
-    </div>
 </div>
 """, unsafe_allow_html=True)
 
-col_img_1, col_img_2, col_img_3 = st.columns([1, 1, 1])
-with col_img_2:
-    if st.button("Open Image\nProcessing", key="open_image_processing_btn", use_container_width=True):
+card_col_1, card_col_2, card_col_3 = st.columns(3)
+with card_col_1:
+    if st.button(
+        "**Image Processing**\nOpen the Image Processing page to upload images and start stylization.",
+        key="card_image_processing",
+        width='stretch',
+    ):
         st.switch_page("pages/image_processing.py")
+
+with card_col_2:
+    if st.button(
+        "**Payment History**\nTrack invoices, subscriptions, and billing activity for your account.",
+        key="card_payment_history",
+        width='stretch',
+    ):
+        st.info("Payment History page is coming soon.")
+
+with card_col_3:
+    if st.button(
+        "**Profile Settings**\nUpdate your profile, change credentials, and manage notification preferences.",
+        key="card_profile_settings",
+        width='stretch',
+    ):
+        st.info("Profile Settings page is coming soon.")
 
 # Delete Account Button
 col1, col2, col3 = st.columns([1, 1, 1])
 with col1:
-    if st.button("🗑️ Delete Account", key="delete_account_btn", help="Permanently delete your account", use_container_width=True):
+    if st.button("🗑️ Delete Account", key="delete_account_btn", help="Permanently delete your account", width='stretch'):
         st.session_state["show_delete_confirmation"] = True
 
 # Show confirmation modal
@@ -469,12 +541,12 @@ if st.session_state.get("show_delete_confirmation"):
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("❌ Cancel", key="cancel_delete", use_container_width=True):
+            if st.button("❌ Cancel", key="cancel_delete", width='stretch'):
                 st.session_state["show_delete_confirmation"] = False
                 st.rerun()
         
         with col2:
-            if st.button("✓ Delete Permanently", key="confirm_delete", use_container_width=True):
+            if st.button("✓ Delete Permanently", key="confirm_delete", width='stretch'):
                 user_id = st.session_state.get("user_id")
                 if user_id:
                     result = delete_user(user_id)

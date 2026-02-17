@@ -13,7 +13,7 @@ from utils.edge_detection import EdgeParams, compare_original_and_edges, detect_
 from utils.image_upload import MAX_UPLOAD_SIZE_MB, process_and_save_upload, remove_temp_file
 
 
-st.set_page_config(page_title="Image Processing - Vivido", layout="wide")
+st.set_page_config(page_title="Image Processing - Vivido",page_icon="assets/logo/vivido_logo2.jpeg", layout="wide")
 
 if (
     not st.session_state.get("logged_in")
@@ -37,6 +37,8 @@ if "uploaded_image_signature" not in st.session_state:
     st.session_state["uploaded_image_signature"] = ""
 if "upload_widget_nonce" not in st.session_state:
     st.session_state["upload_widget_nonce"] = 0
+if "uploaded_image_confirmed" not in st.session_state:
+    st.session_state["uploaded_image_confirmed"] = False
 
 
 def _get_mime_type(file_name: str) -> str:
@@ -191,6 +193,7 @@ if uploaded_file is not None:
             st.session_state["uploaded_image_path"] = result["file_path"]
             st.session_state["uploaded_image_metadata"] = result["metadata"]
             st.session_state["uploaded_image_signature"] = file_signature
+            st.session_state["uploaded_image_confirmed"] = False
             st.success("Image uploaded successfully.")
         else:
             st.error(result.get("message", "Failed to upload image."))
@@ -206,6 +209,28 @@ if st.session_state.get("uploaded_image_path"):
         st.error("Could not load the uploaded image from temporary storage.")
         st.stop()
 
+    if not st.session_state.get("uploaded_image_confirmed"):
+        st.markdown("### Confirm Uploaded Image")
+        st.info("Please confirm this is the correct image before processing.")
+        st.image(original_image, caption="Uploaded image preview", use_container_width=True)
+
+        confirm_col, replace_col = st.columns(2)
+        with confirm_col:
+            if st.button("Yes, this is correct", key="confirm_uploaded_image", use_container_width=True):
+                st.session_state["uploaded_image_confirmed"] = True
+                st.rerun()
+        with replace_col:
+            if st.button("No, upload another image", key="reject_uploaded_image", use_container_width=True):
+                remove_temp_file(st.session_state.get("uploaded_image_path"))
+                st.session_state["uploaded_image_path"] = ""
+                st.session_state["uploaded_image_metadata"] = {}
+                st.session_state["uploaded_image_signature"] = ""
+                st.session_state["uploaded_image_confirmed"] = False
+                st.session_state["upload_widget_nonce"] += 1
+                st.rerun()
+
+        st.stop()
+
     preview_mode = st.selectbox(
         "Processed Preview Mode",
         ["Original", "Auto Contrast", "Contrast Boost", "Sharpen", "Grayscale", "Smooth"],
@@ -215,103 +240,152 @@ if st.session_state.get("uploaded_image_path"):
     processed_image = _build_processed_preview(original_image, preview_mode, preview_intensity)
 
     zoom_percent = st.select_slider("Zoom", options=[25, 50, 75, 100, 125, 150, 200], value=100)
-    fit_to_width = st.toggle("Fit preview to page width", value=False, key="fit_preview_to_width")
+    fit_to_width = st.toggle("Fit preview to page width", value=True, key="fit_preview_to_width")
 
     base_width = int(metadata.get("width") or original_image.width or 800)
-    preview_width = max(220, int(base_width * (zoom_percent / 100)))
+    preview_width = max(420, int(base_width * (zoom_percent / 100)))
 
-    st.markdown("### Preview")
-    col_original, col_processed = st.columns(2)
-    with col_original:
+    st.markdown("### Processed Preview")
+    st.image(
+        processed_image,
+        caption=f"Processed ({preview_mode})",
+        use_container_width=True,
+    )
+    with st.expander("Show Original Reference"):
         st.image(
             original_image,
             caption="Original",
             use_container_width=fit_to_width,
             width=None if fit_to_width else preview_width,
         )
-    with col_processed:
-        st.image(
-            processed_image,
-            caption=f"Processed ({preview_mode})",
-            use_container_width=fit_to_width,
-            width=None if fit_to_width else preview_width,
-        )
 
+    # ----------------------------------------------------
     st.markdown("### Before/After Slider")
     slider_id = f"compare_{uuid.uuid4().hex}"
     original_uri = _to_data_uri(original_image)
-    processed_uri = _to_data_uri(processed_image)
+    compare_processed_image = processed_image
+    if compare_processed_image.size != original_image.size:
+        compare_processed_image = compare_processed_image.resize(original_image.size)
+    processed_uri = _to_data_uri(compare_processed_image)
+    compare_component_height = max(
+        620,
+        min(1400, int((original_image.height / max(original_image.width, 1)) * 1100) + 90),
+    )
+
     components_html(
-        f"""
-<style>
-#{slider_id}.compare-wrap {{
-    position: relative;
-    width: min(100%, 920px);
-    margin: 8px auto 18px auto;
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-}}
-#{slider_id} .base-img,
-#{slider_id} .overlay-img img {{
-    display: block;
-    width: 100%;
-    height: auto;
-}}
-#{slider_id} .overlay-img {{
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 50%;
-    height: 100%;
-    overflow: hidden;
-}}
-#{slider_id} .divider {{
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-1px);
-    width: 2px;
-    height: 100%;
-    background: rgba(241, 245, 249, 0.9);
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
-    pointer-events: none;
-}}
-#{slider_id} input[type="range"] {{
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    width: calc(100% - 24px);
-}}
-</style>
-<div id="{slider_id}" class="compare-wrap">
-  <img class="base-img" src="{original_uri}" alt="Original">
-  <div class="overlay-img" id="{slider_id}_overlay">
-    <img src="{processed_uri}" alt="Processed">
-  </div>
-  <div class="divider" id="{slider_id}_divider"></div>
-  <input type="range" min="0" max="100" value="50" id="{slider_id}_range" />
+    f"""
+<div style="
+    position:relative;
+    width:100%;
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow:0 25px 60px rgba(0,0,0,0.5);
+">
+
+    <img src="{original_uri}" 
+         style="width:100%;display:block;user-select:none;pointer-events:none;">
+
+    <div id="{slider_id}_overlay"
+         style="
+            position:absolute;
+            top:0;
+            left:0;
+            width:100%;
+            height:50%;
+            overflow:hidden;
+         ">
+        <img src="{processed_uri}" 
+             style="width:100%;display:block;user-select:none;pointer-events:none;">
+    </div>
+
+    <div id="{slider_id}_divider"
+         style="
+            position:absolute;
+            top:50%;
+            left:0;
+            transform:translateY(-50%);
+            width:100%;
+            height:20px;
+            cursor:ns-resize;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+         ">
+
+         <div style="
+            width:100%;
+            height:6px;
+            background:linear-gradient(180deg,#06b6d4,#7c3aed);
+            box-shadow:0 0 25px #06b6d4;
+         "></div>
+
+         <div style="
+            position:absolute;
+            width:46px;
+            height:46px;
+            border-radius:50%;
+            background:linear-gradient(135deg,#06b6d4,#7c3aed);
+            box-shadow:0 10px 30px rgba(0,0,0,0.6);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:white;
+            font-weight:700;
+            font-size:14px;
+         ">
+            ⇆
+         </div>
+
+    </div>
 </div>
+
 <script>
-(() => {{
-  const range = document.getElementById("{slider_id}_range");
-  const overlay = document.getElementById("{slider_id}_overlay");
-  const divider = document.getElementById("{slider_id}_divider");
-  if (!range || !overlay || !divider) return;
-  const update = () => {{
-    const val = `${{range.value}}%`;
-    overlay.style.width = val;
-    divider.style.left = val;
-  }};
-  range.addEventListener("input", update);
-  update();
+(function() {{
+    const overlay = document.getElementById("{slider_id}_overlay");
+    const divider = document.getElementById("{slider_id}_divider");
+    const container = divider.parentElement;
+
+    let dragging = false;
+
+    function updatePosition(clientY) {{
+        const rect = container.getBoundingClientRect();
+        let offset = clientY - rect.top;
+
+        if (offset < 0) offset = 0;
+        if (offset > rect.height) offset = rect.height;
+
+        overlay.style.height = offset + "px";
+        divider.style.top = offset + "px";
+    }}
+
+    divider.addEventListener("mousedown", () => dragging = true);
+    window.addEventListener("mouseup", () => dragging = false);
+
+    window.addEventListener("mousemove", (e) => {{
+        if (!dragging) return;
+        updatePosition(e.clientY);
+    }});
+
+    divider.addEventListener("touchstart", (e) => {{
+        dragging = true;
+        updatePosition(e.touches[0].clientY);
+        e.preventDefault();
+    }}, {{ passive:false }});
+
+    window.addEventListener("touchend", () => dragging = false);
+
+    window.addEventListener("touchmove", (e) => {{
+        if (!dragging) return;
+        updatePosition(e.touches[0].clientY);
+        e.preventDefault();
+    }}, {{ passive:false }});
 }})();
 </script>
 """,
-        height=560,
-        scrolling=False,
-    )
+    height=compare_component_height,
+    scrolling=False,
+)
+
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -446,13 +520,16 @@ if st.session_state.get("uploaded_image_path"):
 
     edge_slider_id = f"edge_compare_{uuid.uuid4().hex}"
     edge_original_uri = _to_data_uri(original_image)
-    edge_map_uri = _to_data_uri(Image.fromarray(edge_map_rgb))
+    edge_compare_image = Image.fromarray(edge_map_rgb)
+    if edge_compare_image.size != original_image.size:
+        edge_compare_image = edge_compare_image.resize(original_image.size)
+    edge_map_uri = _to_data_uri(edge_compare_image)
     components_html(
         f"""
 <style>
 #{edge_slider_id}.compare-wrap {{
     position: relative;
-    width: min(100%, 920px);
+    width: 100%;
     margin: 8px auto 18px auto;
     border-radius: 14px;
     overflow: hidden;
@@ -468,27 +545,39 @@ if st.session_state.get("uploaded_image_path"):
     position: absolute;
     top: 0;
     left: 0;
-    width: 50%;
-    height: 100%;
+    width: 100%;
+    height: 50%;
     overflow: hidden;
 }}
 #{edge_slider_id} .divider {{
     position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-1px);
-    width: 2px;
-    height: 100%;
-    background: rgba(241, 245, 249, 0.9);
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
-    pointer-events: none;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 100%;
+    height: 12px;
+    background: rgba(241, 245, 249, 0.96);
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35), 0 8px 20px rgba(15, 23, 42, 0.25);
+    pointer-events: auto;
+    cursor: ns-resize;
 }}
-#{edge_slider_id} input[type="range"] {{
+#{edge_slider_id} .divider::after {{
+    content: "<>";
     position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    width: calc(100% - 24px);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 2px solid rgba(241, 245, 249, 0.95);
+    color: rgba(241, 245, 249, 0.95);
+    font-size: 11px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    letter-spacing: 0.04em;
 }}
 </style>
 <div id="{edge_slider_id}" class="compare-wrap">
@@ -497,25 +586,52 @@ if st.session_state.get("uploaded_image_path"):
     <img src="{edge_map_uri}" alt="Edges">
   </div>
   <div class="divider" id="{edge_slider_id}_divider"></div>
-  <input type="range" min="0" max="100" value="50" id="{edge_slider_id}_range" />
 </div>
 <script>
 (() => {{
-  const range = document.getElementById("{edge_slider_id}_range");
+  const container = document.getElementById("{edge_slider_id}");
+  const slider = document.getElementById("{edge_slider_id}_divider");
   const overlay = document.getElementById("{edge_slider_id}_overlay");
-  const divider = document.getElementById("{edge_slider_id}_divider");
-  if (!range || !overlay || !divider) return;
-  const update = () => {{
-    const val = `${{range.value}}%`;
-    overlay.style.width = val;
-    divider.style.left = val;
+  if (!container || !slider || !overlay) return;
+
+  let isDragging = false;
+  const updateFromClientY = (clientY) => {{
+    const rect = container.getBoundingClientRect();
+    let offset = clientY - rect.top;
+    if (offset < 0) offset = 0;
+    if (offset > rect.height) offset = rect.height;
+    slider.style.top = `${{offset}}px`;
+    overlay.style.height = `${{offset}}px`;
   }};
-  range.addEventListener("input", update);
-  update();
+
+  // Start at exact 50/50
+  const initialRect = container.getBoundingClientRect();
+  updateFromClientY(initialRect.top + (initialRect.height / 2));
+
+  slider.addEventListener("mousedown", () => {{ isDragging = true; }});
+  window.addEventListener("mouseup", () => {{ isDragging = false; }});
+  window.addEventListener("mousemove", (e) => {{
+    if (!isDragging) return;
+    updateFromClientY(e.clientY);
+  }});
+
+  slider.addEventListener("touchstart", (e) => {{
+    isDragging = true;
+    if (e.touches && e.touches.length > 0) {{
+      updateFromClientY(e.touches[0].clientY);
+    }}
+    e.preventDefault();
+  }}, {{ passive: false }});
+  window.addEventListener("touchend", () => {{ isDragging = false; }});
+  window.addEventListener("touchmove", (e) => {{
+    if (!isDragging || !e.touches || e.touches.length === 0) return;
+    updateFromClientY(e.touches[0].clientY);
+    e.preventDefault();
+  }}, {{ passive: false }});
 }})();
 </script>
 """,
-        height=560,
+        height=compare_component_height,
         scrolling=False,
     )
 
@@ -563,5 +679,6 @@ if st.session_state.get("uploaded_image_path"):
         st.session_state["uploaded_image_path"] = ""
         st.session_state["uploaded_image_metadata"] = {}
         st.session_state["uploaded_image_signature"] = ""
+        st.session_state["uploaded_image_confirmed"] = False
         st.session_state["upload_widget_nonce"] += 1
         st.rerun()

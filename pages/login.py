@@ -7,7 +7,7 @@ from streamlit.components.v1 import html as components_html
 from backend.user_management import login_user
 
 
-st.set_page_config(page_title="Login - Vivido", layout="centered")
+st.set_page_config(page_title="Login - Vivido",page_icon="assets/logo/login.jpeg", layout="centered")
 
 # Reset global welcome-page effects to avoid Streamlit chrome mirroring on this page.
 st.markdown(
