@@ -9,4 +9,14 @@ st.set_page_config(
     layout="centered",
 )
 
+if (
+    st.session_state.get("logged_in")
+    or (
+        st.session_state.get("user_id")
+        and st.session_state.get("current_user")
+    )
+):
+    st.session_state["logged_in"] = True
+    st.switch_page("pages/dashboard.py")
+
 render_welcome_page()

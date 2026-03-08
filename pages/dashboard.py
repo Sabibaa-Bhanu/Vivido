@@ -1,272 +1,228 @@
 import streamlit as st
 from datetime import datetime
-from backend.user_management import delete_user
+from backend.user_management import delete_user, revoke_remember_token
 
-st.set_page_config(page_title="Dashboard - Vivido",page_icon="assets/logo/dashboard.jpeg", layout="wide")
+st.set_page_config(page_title="Dashboard - Vivido", page_icon="assets/logo/dashboard.jpeg", layout="wide")
 
 # Initialize delete confirmation state
 if "show_delete_confirmation" not in st.session_state:
     st.session_state["show_delete_confirmation"] = False
 
-# Custom CSS to match login/register theme with enhanced design
+# Custom CSS matching reference design
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --primary: #06b6d4;
-    --primary-dark: #0891b2;
-    --secondary: #7c3aed;
+    --primary: #7c3aed;
+    --primary-light: #a78bfa;
+    --secondary: #06b6d4;
     --success: #10b981;
     --error: #ef4444;
     --warning: #f59e0b;
-    --dark-bg: #0f172a;
-    --dark-surface: #1e293b;
-    --dark-surface-light: #334155;
+    --dark-bg: #0b0e1a;
+    --dark-surface: #12091f;
+    --dark-surface-light: #1a1030;
     --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --border: #475569;
+    --text-secondary: #94a3b8;
+    --border: rgba(124, 58, 237, 0.25);
+    --card-glow: rgba(124, 58, 237, 0.08);
 }
 
 * {
     font-family: 'Poppins', sans-serif;
 }
 
-body {
-    background: linear-gradient(135deg, #0f172a 0%, #1a0f2e 50%, #0f172a 100%);
+.stApp {
+    background: linear-gradient(135deg, #0b0e1a 0%, #12091f 50%, #0b0e1a 100%);
     color: var(--text-primary);
 }
 
-body::before {
-    content: "";
-    position: fixed;
-    top: -50%;
-    right: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%),
-                radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.15) 0%, transparent 70%);
-    animation: gradientShift 15s ease-in-out infinite;
-    pointer-events: none;
-    z-index: -1;
+/* Hide default Streamlit header */
+header[data-testid="stHeader"] {
+    background: transparent !important;
 }
 
-@keyframes gradientShift {
-    0%, 100% { transform: translate(0, 0); }
-    50% { transform: translate(-50px, -50px); }
-}
-
-.dashboard-header {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    border-radius: 20px;
-    padding: 30px;
-    margin-bottom: 30px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-}
-
-.header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.header-title {
-    color: var(--primary);
-    font-size: 2rem;
-    font-weight: 700;
-}
-
-.user-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 20px;
-}
-
-.user-details {
-    display: flex;
-    gap: 30px;
-    flex-wrap: wrap;
-    flex: 1;
-}
-
-.info-item {
-    background: rgba(6, 182, 212, 0.1);
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    border-radius: 12px;
-    padding: 15px 20px;
-    color: var(--text-primary);
-    transition: all 0.3s ease;
-}
-
-.info-item:hover {
-    background: rgba(6, 182, 212, 0.15);
-    border-color: rgba(6, 182, 212, 0.5);
-    transform: translateY(-2px);
-}
-
-.btn-container {
-    display: flex;
-    gap: 15px;
-    flex-wrap: wrap;
-}
-
-.btn {
-    border: none;
-    border-radius: 10px;
-    padding: 12px 24px;
-    color: white;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.95rem;
-}
-
-.btn-logout {
-    background: linear-gradient(135deg, var(--secondary), #a855f7);
-    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
-}
-
-.btn-logout:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
-}
-
-.main-content {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    border-radius: 20px;
-    padding: 40px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-    margin-bottom: 30px;
-}
-
-.welcome-section {
-    text-align: center;
-    margin-bottom: 50px;
-}
-
-.welcome-title {
-    color: var(--primary);
-    font-size: 2.8rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.welcome-subtitle {
-    color: var(--text-secondary);
-    font-size: 1.15rem;
-    margin-bottom: 30px;
-}
-
-.account-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-.account-card {
-    background: rgba(6, 182, 212, 0.08);
-    border: 1px solid rgba(6, 182, 212, 0.25);
+/* Top Navbar */
+.top-navbar {
+    background: linear-gradient(135deg, rgba(18, 9, 31, 0.95), rgba(26, 16, 48, 0.95));
+    border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 18px 20px;
-}
-
-.account-label {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
-}
-
-.account-value {
-    color: var(--text-primary);
-    font-size: 1.05rem;
-    font-weight: 600;
-}
-
-.nav-menu {
+    padding: 14px 28px;
+    margin-bottom: 28px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(12px);
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.navbar-brand .brand-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    margin-bottom: 35px;
+    font-size: 14px;
 }
 
-.nav-link {
-    display: inline-block;
-    padding: 10px 18px;
-    border-radius: 999px;
-    border: 1px solid rgba(124, 58, 237, 0.4);
+.navbar-brand .brand-name {
+    font-size: 1.1rem;
+    font-weight: 700;
     color: var(--text-primary);
-    text-decoration: none;
-    background: rgba(124, 58, 237, 0.12);
-    font-weight: 600;
-    transition: all 0.25s ease;
-    cursor: pointer;
+    letter-spacing: 0.02em;
 }
 
-.nav-link:hover {
-    transform: translateY(-2px);
-    background: rgba(124, 58, 237, 0.2);
-    border-color: rgba(124, 58, 237, 0.6);
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
 }
 
-.section-grid {
+.navbar-right .user-greeting {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.navbar-right .user-greeting strong {
+    color: var(--primary-light);
+}
+
+/* Dashboard Title */
+.dashboard-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    padding-left: 4px;
+}
+
+/* Action Cards */
+.action-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 22px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-bottom: 32px;
 }
 
-.section-card {
-    display: block;
-    width: 100%;
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(124, 58, 237, 0.08));
-    border: 1px solid rgba(6, 182, 212, 0.25);
-    border-radius: 16px;
-    padding: 24px;
+.action-card {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(124, 58, 237, 0.05));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 20px;
     cursor: pointer;
     transition: all 0.25s ease;
-    text-decoration: none;
-    color: inherit;
-    text-align: left;
+    position: relative;
+    overflow: hidden;
 }
 
-.section-card:hover {
+.action-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 30% 30%, rgba(124, 58, 237, 0.12), transparent 70%);
+    pointer-events: none;
+}
+
+.action-card:hover {
+    border-color: rgba(124, 58, 237, 0.45);
     transform: translateY(-2px);
-    border-color: rgba(6, 182, 212, 0.45);
+    box-shadow: 0 8px 30px rgba(124, 58, 237, 0.15);
 }
 
-.section-card:focus-visible {
-    outline: 2px solid rgba(6, 182, 212, 0.6);
-    outline-offset: 3px;
+.action-card .card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-bottom: 14px;
 }
 
+.action-card .card-icon.purple {
+    background: rgba(124, 58, 237, 0.25);
+    border: 1px solid rgba(124, 58, 237, 0.4);
+}
+
+.action-card .card-icon.cyan {
+    background: rgba(6, 182, 212, 0.25);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+}
+
+.action-card .card-icon.pink {
+    background: rgba(236, 72, 153, 0.25);
+    border: 1px solid rgba(236, 72, 153, 0.4);
+}
+
+.action-card .card-title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.action-card .card-desc {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+/* Recent Activity */
+.recent-activity-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+    padding-left: 4px;
+}
+
+.recent-activity-box {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.06), rgba(124, 58, 237, 0.03));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 36px 20px;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.recent-activity-box .empty-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.recent-activity-box .empty-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Streamlit button overrides for cards */
 .st-key-card_image_processing button,
 .st-key-card_payment_history button,
 .st-key-card_profile_settings button {
-    min-height: 220px;
+    min-height: 160px;
     width: 100%;
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(124, 58, 237, 0.08));
-    border: 1px solid rgba(6, 182, 212, 0.25);
-    border-radius: 16px;
-    color: var(--text-primary);
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(124, 58, 237, 0.05)) !important;
+    border: 1px solid rgba(124, 58, 237, 0.25) !important;
+    border-radius: 14px !important;
+    color: var(--text-primary) !important;
     text-align: left;
-    padding: 24px;
+    padding: 22px 20px;
     line-height: 1.5;
     white-space: normal;
-    font-size: 0.98rem;
+    font-size: 0.92rem;
 }
 
 .st-key-card_image_processing button p,
@@ -274,8 +230,8 @@ body::before {
 .st-key-card_profile_settings button p {
     margin: 0;
     color: var(--text-secondary);
-    font-size: 0.98rem;
-    font-weight: 500;
+    font-size: 0.88rem;
+    font-weight: 400;
     line-height: 1.5;
 }
 
@@ -283,136 +239,76 @@ body::before {
 .st-key-card_payment_history button p strong,
 .st-key-card_profile_settings button p strong {
     display: block;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     color: #ffffff;
-    font-weight: 900;
-    font-size: 1.5rem;
-    line-height: 1.15;
-    letter-spacing: 0.01em;
-    text-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+    font-weight: 700;
+    font-size: 1.15rem;
+    line-height: 1.2;
 }
 
 .st-key-card_image_processing button:hover,
 .st-key-card_payment_history button:hover,
 .st-key-card_profile_settings button:hover {
     transform: translateY(-2px);
-    border-color: rgba(6, 182, 212, 0.45);
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(124, 58, 237, 0.14));
+    border-color: rgba(124, 58, 237, 0.45) !important;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(124, 58, 237, 0.08)) !important;
+    box-shadow: 0 8px 30px rgba(124, 58, 237, 0.15);
 }
 
-.section-title {
-    color: var(--text-primary);
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-}
-
-.section-desc {
-    color: var(--text-secondary);
-    font-size: 0.95rem;
-    line-height: 1.6;
-}
-
+/* Danger zone */
 .danger-zone {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.08));
-    border: 2px solid rgba(239, 68, 68, 0.3);
-    border-radius: 15px;
-    padding: 30px;
-    margin-top: 50px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.05));
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 14px;
+    padding: 24px;
+    margin-top: 40px;
 }
 
 .danger-title {
     color: var(--error);
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 700;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .danger-desc {
     color: var(--text-secondary);
-    font-size: 0.95rem;
-    margin-bottom: 20px;
+    font-size: 0.88rem;
+    margin-bottom: 16px;
     line-height: 1.6;
 }
 
-.btn-delete {
-    background: linear-gradient(135deg, var(--error), #dc2626);
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
-}
-
-.btn-delete:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
-}
-
-.btn-cancel {
-    background: transparent;
-    border: 2px solid var(--border);
-    color: var(--text-secondary);
-    box-shadow: none;
-}
-
-.btn-cancel:hover {
-    background: rgba(71, 85, 105, 0.2);
-    border-color: var(--text-primary);
-    color: var(--text-primary);
-}
-
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    backdrop-filter: blur(5px);
-}
-
 .modal-content {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-    border: 2px solid rgba(239, 68, 68, 0.5);
-    border-radius: 20px;
-    padding: 40px;
+    background: linear-gradient(135deg, rgba(18, 9, 31, 0.98), rgba(15, 12, 30, 0.98));
+    border: 2px solid rgba(239, 68, 68, 0.4);
+    border-radius: 16px;
+    padding: 32px;
     max-width: 500px;
     text-align: center;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 }
 
 .modal-icon {
-    font-size: 3rem;
-    margin-bottom: 20px;
+    font-size: 2.5rem;
+    margin-bottom: 16px;
     display: inline-block;
 }
 
 .modal-title {
     color: var(--error);
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 700;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
 }
 
 .modal-text {
     color: var(--text-secondary);
-    font-size: 0.95rem;
-    margin-bottom: 30px;
+    font-size: 0.9rem;
+    margin-bottom: 24px;
     line-height: 1.6;
-}
-
-.modal-buttons {
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-}
-
-.modal-buttons button {
-    flex: 1;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -426,9 +322,8 @@ if (
     st.session_state["logged_in"] = True
 
 if not st.session_state.get("logged_in"):
-    st.warning("Please login first")
-    st.page_link("pages/login.py", label="Go to Login")
-    st.stop()
+    st.session_state["redirect_after_login"] = "pages/dashboard.py"
+    st.switch_page("pages/login.py")
 
 query_params = st.query_params
 action = query_params.get("action", "")
@@ -442,6 +337,10 @@ if action == "open_profile_settings":
     st.info("Profile Settings page is coming soon.")
     st.query_params.clear()
 
+username = st.session_state.get("current_username", "User")
+email = st.session_state.get("current_user", "N/A")
+user_id = st.session_state.get("user_id", "N/A")
+
 last_login_value = st.session_state.get("last_login")
 last_login_display = "N/A"
 if last_login_value:
@@ -451,53 +350,37 @@ if last_login_value:
     except (ValueError, TypeError):
         last_login_display = str(last_login_value)
 
-# Dashboard header
-st.markdown(f"""
-<div class="dashboard-header">
-    <div class="header-top">
-        <div class="header-title">✨ Vivido Dashboard</div>
-    </div>
-    <div class="user-info">
-        <div class="user-details">
-            <div class="info-item">
-                <strong>👤 User:</strong> {st.session_state.get('current_username', 'User')}
-            </div>
-            <div class="info-item">
-                <strong>📧 Email:</strong> {st.session_state.get('current_user', 'N/A')}
-            </div>
-            <div class="info-item">
-                <strong>🕒 Last Login:</strong> {last_login_display}
-            </div>
+# Top Navbar (full width HTML with logout button integrated)
+nav_col1, nav_col2 = st.columns([5, 1])
+with nav_col1:
+    st.markdown(f"""
+    <div class="top-navbar">
+        <div class="navbar-brand">
+            <div class="brand-icon">✨</div>
+            <div class="brand-name">Vivido</div>
+        </div>
+        <div class="navbar-right">
+            <span class="user-greeting">Hello, <strong>{username}</strong></span>
         </div>
     </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Logout button
-col1, col2, col3 = st.columns([1, 1, 1])
-with col3:
-    if st.button("🔓 Logout", key="logout_btn", help="Click to logout and return to login page", width='stretch'):
+    """, unsafe_allow_html=True)
+with nav_col2:
+    if st.button("Logout", key="logout_btn", help="Click to logout", width='stretch'):
+        remember_token = st.session_state.get("remember_token", "")
+        if remember_token:
+            revoke_remember_token(remember_token)
         st.session_state.clear()
         st.session_state["just_logged_out"] = True
         st.switch_page("pages/login.py")
 
-username = st.session_state.get("current_username", "User")
-email = st.session_state.get("current_user", "N/A")
-user_id = st.session_state.get("user_id", "N/A")
+# Dashboard Title
+st.markdown('<div class="dashboard-title">Dashboard</div>', unsafe_allow_html=True)
 
-st.markdown(f"""
-<div class="main-content">
-    <div class="welcome-section">
-        <h1 class="welcome-title">Welcome back, {username}</h1>
-        <p class="welcome-subtitle">Your personalized image styling platform.</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
+# Three Action Cards
 card_col_1, card_col_2, card_col_3 = st.columns(3)
 with card_col_1:
     if st.button(
-        "**Image Processing**\nOpen the Image Processing page to upload images and start stylization.",
+        "**🎬 Vivido Studio**\nStyle your moments.",
         key="card_image_processing",
         width='stretch',
     ):
@@ -505,67 +388,100 @@ with card_col_1:
 
 with card_col_2:
     if st.button(
-        "**Payment History**\nTrack invoices, subscriptions, and billing activity for your account.",
+        "**🔍 Art Gallery**\nView your past creations.",
         key="card_payment_history",
         width='stretch',
     ):
-        st.info("Payment History page is coming soon.")
+        st.info("Art Gallery page is coming soon.")
 
 with card_col_3:
     if st.button(
-        "**Profile Settings**\nUpdate your profile, change credentials, and manage notification preferences.",
+        "**⚙️ Profile Settings**\nUpdate your account information.",
         key="card_profile_settings",
         width='stretch',
     ):
         st.info("Profile Settings page is coming soon.")
 
-# Delete Account Button
-col1, col2, col3 = st.columns([1, 1, 1])
-with col1:
-    if st.button("🗑️ Delete Account", key="delete_account_btn", help="Permanently delete your account", width='stretch'):
-        st.session_state["show_delete_confirmation"] = True
+# Last Login Info
+st.markdown(f"""
+<div style="
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    margin-bottom: 20px;
+    padding-left: 4px;
+">
+    🕒 Last Login: <strong style="color: var(--text-primary);">{last_login_display}</strong>
+</div>
+""", unsafe_allow_html=True)
 
-# Show confirmation modal
-if st.session_state.get("show_delete_confirmation"):
-    col1, col2, col3 = st.columns([0.15, 0.7, 0.15])
-    with col2:
-        st.markdown("""
-        <div class="modal-content">
-            <div class="modal-icon">⚠️</div>
-            <div class="modal-title">Delete Account?</div>
-            <div class="modal-text">
-                Are you absolutely sure? This action cannot be undone. Your account and all data will be permanently deleted, and you'll need to register again if you want to use Vivido in the future.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("❌ Cancel", key="cancel_delete", width='stretch'):
-                st.session_state["show_delete_confirmation"] = False
-                st.rerun()
-        
+# Recent Activity Section
+st.markdown('<div class="recent-activity-title">Recent Activity</div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="recent-activity-box">
+    <div class="empty-icon">🖼️</div>
+    <div class="empty-text">No recent activity found.</div>
+</div>
+""", unsafe_allow_html=True)
+
+# Advanced toggle
+show_advanced_dashboard = st.toggle(
+    "Show Advanced Options",
+    value=False,
+    help="Enable account management actions.",
+    key="dashboard_show_advanced_toggle",
+)
+
+if show_advanced_dashboard:
+    # Delete Account Button
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("🗑️ Delete Account", key="delete_account_btn", help="Permanently delete your account", width='stretch'):
+            st.session_state["show_delete_confirmation"] = True
+
+    # Show confirmation modal
+    if st.session_state.get("show_delete_confirmation"):
+        col1, col2, col3 = st.columns([0.15, 0.7, 0.15])
         with col2:
-            if st.button("✓ Delete Permanently", key="confirm_delete", width='stretch'):
-                user_id = st.session_state.get("user_id")
-                if user_id:
-                    result = delete_user(user_id)
-                    if result.get("success"):
-                        st.session_state.clear()
-                        st.markdown("""
-                        <div style="text-align: center; padding: 40px;">
-                            <div style="font-size: 2rem; margin-bottom: 20px;">✓</div>
-                            <div style="color: #10b981; font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;">
-                                Account deleted successfully!
-                            </div>
-                            <div style="color: #cbd5e1; margin-bottom: 30px;">
-                                Redirecting to register page...
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        import time
-                        time.sleep(2)
-                        st.switch_page("pages/register.py")
-                    else:
-                        st.error(f"Error: {result.get('message')}")
+            st.markdown("""
+            <div class="modal-content">
+                <div class="modal-icon">⚠️</div>
+                <div class="modal-title">Delete Account?</div>
+                <div class="modal-text">
+                    Are you absolutely sure? This action cannot be undone. Your account and all data will be permanently deleted, and you'll need to register again if you want to use Vivido in the future.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("❌ Cancel", key="cancel_delete", width='stretch'):
+                    st.session_state["show_delete_confirmation"] = False
+                    st.rerun()
+
+            with col2:
+                if st.button("✓ Delete Permanently", key="confirm_delete", width='stretch'):
+                    user_id = st.session_state.get("user_id")
+                    if user_id:
+                        result = delete_user(user_id)
+                        if result.get("success"):
+                            remember_token = st.session_state.get("remember_token", "")
+                            if remember_token:
+                                revoke_remember_token(remember_token)
+                            st.session_state.clear()
+                            st.markdown("""
+                            <div style="text-align: center; padding: 40px;">
+                                <div style="font-size: 2rem; margin-bottom: 20px;">✓</div>
+                                <div style="color: #10b981; font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;">
+                                    Account deleted successfully!
+                                </div>
+                                <div style="color: #cbd5e1; margin-bottom: 30px;">
+                                    Redirecting to register page...
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            import time
+                            time.sleep(2)
+                            st.switch_page("pages/register.py")
+                        else:
+                            st.error(f"Error: {result.get('message')}")

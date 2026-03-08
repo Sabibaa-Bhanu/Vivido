@@ -21,6 +21,20 @@ import numpy as np
 EdgeMethod = Literal["canny", "adaptive"]
 ImageType = Literal["portrait", "landscape", "object"]
 
+__all__ = [
+    "EdgeParams",
+    "EdgeMethod",
+    "ImageType",
+    "OPTIMAL_SETTINGS",
+    "detect_cartoon_edges",
+    "detect_cartoon_edges_from_path",
+    "detect_edges_adaptive",
+    "detect_edges_canny",
+    "compare_original_and_edges",
+    "recommended_params",
+    "optimal_settings_documentation",
+]
+
 
 @dataclass(frozen=True)
 class EdgeParams:
@@ -38,6 +52,40 @@ class EdgeParams:
     sensitivity: float = 1.0
     edge_thickness: int = 1
     invert: bool = False
+
+
+OPTIMAL_SETTINGS: dict[ImageType, dict[str, object]] = {
+    "portrait": {
+        "method": "adaptive",
+        "adaptive_block_size": 11,
+        "adaptive_c": 3,
+        "median_blur_kernel": 7,
+        "sensitivity": 1.1,
+        "edge_thickness": 1,
+        "invert": False,
+        "notes": "Best for soft facial contours and uneven skin lighting.",
+    },
+    "landscape": {
+        "method": "canny",
+        "canny_low": 60,
+        "canny_high": 150,
+        "median_blur_kernel": 5,
+        "sensitivity": 1.0,
+        "edge_thickness": 2,
+        "invert": False,
+        "notes": "Balanced for foliage, skyline, and terrain boundaries.",
+    },
+    "object": {
+        "method": "canny",
+        "canny_low": 80,
+        "canny_high": 180,
+        "median_blur_kernel": 5,
+        "sensitivity": 0.95,
+        "edge_thickness": 2,
+        "invert": False,
+        "notes": "Sharper outlines for products and man-made shapes.",
+    },
+}
 
 
 def _validate_odd(value: int, minimum: int, field_name: str) -> int:
@@ -169,6 +217,23 @@ def detect_cartoon_edges(image: np.ndarray, params: EdgeParams) -> np.ndarray:
     raise ValueError(f"Unsupported method: {params.method}")
 
 
+def detect_cartoon_edges_from_path(
+    image_path: str,
+    params: EdgeParams | None = None,
+    image_type: ImageType = "object",
+) -> np.ndarray:
+    """
+    Load an image from disk and return cartoon-style edge map.
+
+    If params is omitted, recommended preset values are used for image_type.
+    """
+    image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(f"Could not read image from path: {image_path}")
+    effective_params = params or recommended_params(image_type)
+    return detect_cartoon_edges(image, effective_params)
+
+
 def compare_original_and_edges(
     image: np.ndarray,
     edge_map: np.ndarray,
@@ -204,35 +269,22 @@ def compare_original_and_edges(
 
 def recommended_params(image_type: ImageType) -> EdgeParams:
     """Recommended parameter presets from local experiments for cartoon-like edges."""
-    if image_type == "portrait":
+    if image_type in OPTIMAL_SETTINGS:
+        selected = OPTIMAL_SETTINGS[image_type]
         return EdgeParams(
-            method="adaptive",
-            adaptive_block_size=11,
-            adaptive_c=3,
-            median_blur_kernel=7,
-            sensitivity=1.1,
-            edge_thickness=1,
-            invert=False,
-        )
-    if image_type == "landscape":
-        return EdgeParams(
-            method="canny",
-            canny_low=60,
-            canny_high=150,
-            median_blur_kernel=5,
-            sensitivity=1.0,
-            edge_thickness=2,
-            invert=False,
-        )
-    if image_type == "object":
-        return EdgeParams(
-            method="canny",
-            canny_low=80,
-            canny_high=180,
-            median_blur_kernel=5,
-            sensitivity=0.95,
-            edge_thickness=2,
-            invert=False,
+            method=selected["method"],
+            canny_low=selected.get("canny_low", 70),
+            canny_high=selected.get("canny_high", 140),
+            adaptive_block_size=selected.get("adaptive_block_size", 9),
+            adaptive_c=selected.get("adaptive_c", 2),
+            median_blur_kernel=selected.get("median_blur_kernel", 5),
+            sensitivity=selected.get("sensitivity", 1.0),
+            edge_thickness=selected.get("edge_thickness", 1),
+            invert=selected.get("invert", False),
         )
     raise ValueError(f"Unsupported image_type: {image_type}")
 
+
+def optimal_settings_documentation() -> dict[ImageType, dict[str, object]]:
+    """Return documented optimal settings and notes by image type."""
+    return {key: dict(value) for key, value in OPTIMAL_SETTINGS.items()}

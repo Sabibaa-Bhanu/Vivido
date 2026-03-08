@@ -2,9 +2,91 @@ import re
 import sqlite3
 import bcrypt
 import secrets
+import hashlib
+import logging
 from datetime import datetime, timedelta
 from backend.database import get_connection
 from backend.database import create_tables
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Rate limiting constants
+TOKEN_LOGIN_MAX_ATTEMPTS = 5  # Max failed token login attempts
+TOKEN_LOGIN_WINDOW_SECONDS = 300  # 5 minute window
+
+
+def _check_rate_limit(identifier: str) -> tuple[bool, str]:
+    """
+    Check if the identifier has exceeded rate limit using database.
+    
+    Args:
+        identifier: A unique identifier (e.g., IP address hash, token hash)
+    
+    Returns:
+        Tuple of (is_allowed, message)
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Clean up expired rate limit entries
+        cursor.execute(
+            "DELETE FROM rate_limits WHERE expires_at < datetime('now')"
+        )
+        conn.commit()
+        
+        # Check current request
+        cursor.execute(
+            """SELECT attempt_count, expires_at FROM rate_limits 
+               WHERE identifier = ? AND expires_at > datetime('now')""",
+            (identifier,)
+        )
+        row = cursor.fetchone()
+        
+        if row:
+            attempt_count = row[0]
+            if attempt_count >= TOKEN_LOGIN_MAX_ATTEMPTS:
+                return False, f"Too many failed attempts. Please try again later."
+            # Increment attempt count
+            cursor.execute(
+                "UPDATE rate_limits SET attempt_count = attempt_count + 1 WHERE identifier = ?",
+                (identifier,)
+            )
+        else:
+            # Create new rate limit entry
+            cursor.execute(
+                """INSERT INTO rate_limits (identifier, attempt_count, expires_at) 
+                   VALUES (?, 1, datetime('now', '+5 minutes'))""",
+                (identifier,)
+            )
+        conn.commit()
+        return True, ""
+        
+    except sqlite3.Error as e:
+        logger.error(f"Database error in rate limit check: {e}")
+        # Use fail-closed for security - deny on database errors to prevent abuse
+        # This prevents attackers from exploiting DB issues to bypass rate limits
+        return False, "Service temporarily unavailable. Please try again later."
+    finally:
+        if conn:
+            conn.close()
+
+
+def _record_successful_login(identifier: str) -> None:
+    """Clear rate limit after successful login."""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rate_limits WHERE identifier = ?", (identifier,))
+        conn.commit()
+    except sqlite3.Error as e:
+        logger.error(f"Database error clearing rate limit: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 create_tables()
 # ------------------------
@@ -34,6 +116,140 @@ def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
     hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
     return hashed_password
+
+
+def _hash_remember_token(raw_token: str) -> str:
+    """Hash remember-me token before storing in DB."""
+    return hashlib.sha256((raw_token or "").encode("utf-8")).hexdigest()
+
+
+def create_remember_token(user_id: int, raw_token: str | None = None) -> str | None:
+    """Create and persist a long-lived remember-me token for a user."""
+    conn = None
+    try:
+        if not user_id:
+            return None
+
+        raw_token = (raw_token or "").strip() or secrets.token_urlsafe(48)
+        token_hash = _hash_remember_token(raw_token)
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO remember_sessions (user_id, token_hash, revoked)
+            VALUES (?, ?, 0)
+            ON CONFLICT(token_hash) DO UPDATE SET
+                user_id = excluded.user_id,
+                revoked = 0,
+                created_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, token_hash),
+        )
+        conn.commit()
+        return raw_token
+    except sqlite3.Error:
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def revoke_remember_token(raw_token: str) -> bool:
+    """Revoke a remember-me token."""
+    conn = None
+    try:
+        token_hash = _hash_remember_token(raw_token)
+        if not token_hash:
+            return False
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE remember_sessions SET revoked = 1 WHERE token_hash = ?",
+            (token_hash,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error:
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+def login_with_remember_token(raw_token: str):
+    """
+    Authenticate user via a persistent remember-me token.
+
+    Returns a dict compatible with login_user success payload.
+    """
+    # Apply rate limiting based on token hash
+    token_hash = _hash_remember_token(raw_token) if raw_token else ""
+    is_allowed, rate_limit_message = _check_rate_limit(token_hash)
+    if not is_allowed:
+        # Log failed attempt due to rate limiting
+        logger.warning(f"Rate limit exceeded for token login attempt")
+        return {"success": False, "message": rate_limit_message}
+    
+    conn = None
+    try:
+        if not raw_token:
+            return {"success": False, "message": "Invalid token"}
+            
+        token_hash = _hash_remember_token(raw_token)
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT u.user_id, u.username, u.email, u.last_login, u.is_active
+            FROM remember_sessions rs
+            JOIN users u ON u.user_id = rs.user_id
+            WHERE rs.token_hash = ? AND rs.revoked = 0 AND (rs.expires_at IS NULL OR rs.expires_at > datetime('now'))
+            """,
+            (token_hash,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"success": False, "message": "Session expired or not found"}
+
+        user_id, username, email, last_login, is_active = row
+        if not is_active:
+            return {"success": False, "message": "Account is inactive. Contact support."}
+
+        # Update last_login for remembered sign-ins as well
+        new_last_login = datetime.now().isoformat()
+        cursor.execute(
+            "UPDATE users SET last_login = ? WHERE user_id = ?",
+            (new_last_login, user_id),
+        )
+        conn.commit()
+
+        # Clear rate limit after successful login
+        _record_successful_login(token_hash)
+
+        return {
+            "success": True,
+            "user_id": user_id,
+            "username": username,
+            "email": email,
+            "last_login": new_last_login,
+            "message": "Login successful",
+        }
+    except sqlite3.Error as e:
+        logger.error(f"Database error during remember token login: {e}")
+        return {"success": False, "message": "Database error. Please try again later."}
+    except ValueError as e:
+        # Re-raise validation errors with appropriate message
+        logger.warning(f"Validation error during remember token login: {e}")
+        return {"success": False, "message": str(e)}
+    except Exception as e:
+        # Log unexpected errors but don't expose details to user
+        logger.exception("Unexpected error during remember token login")
+        return {"success": False, "message": "An unexpected error occurred. Please try again later."}
+    finally:
+        if conn:
+            conn.close()
 
 # ------------------------
 # User registration

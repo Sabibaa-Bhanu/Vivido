@@ -4,7 +4,7 @@ import urllib.parse
 import streamlit as st
 from streamlit.components.v1 import html as components_html
 
-from backend.user_management import login_user
+from backend.user_management import create_remember_token, login_user, login_with_remember_token, revoke_remember_token
 
 
 st.set_page_config(page_title="Login - Vivido",page_icon="assets/logo/login.jpeg", layout="centered")
@@ -40,6 +40,8 @@ if "login_error" not in st.session_state:
     st.session_state["login_error"] = ""
 if "redirect_page" not in st.session_state:
     st.session_state["redirect_page"] = ""
+if "clear_remember_storage" not in st.session_state:
+    st.session_state["clear_remember_storage"] = False
 
 
 def _get_query_params():
@@ -626,18 +628,25 @@ form_html = r"""
       const forgotPasswordLink = document.getElementById('forgotPasswordLink');
       const submitBtn = document.getElementById('submitBtn');
       const rememberedEmail = localStorage.getItem('vividoRememberEmail');
-      const rememberedPassword = localStorage.getItem('vividoRememberPassword');
+      const rememberedToken = localStorage.getItem('vividoRememberToken');
       const rememberedEnabled = localStorage.getItem('vividoRememberEnabled') === 'true';
       const initialMessageType = __INITIAL_MESSAGE_TYPE__;
       const initialMessageText = __INITIAL_MESSAGE_TEXT__;
       const isNotFound = __INITIAL_NOT_FOUND__;
       const justLoggedOut = __JUST_LOGGED_OUT__;
       const nextParam = __NEXT_PARAM__;
+      const shouldClearRememberStorage = __CLEAR_REMEMBER_STORAGE__;
 
       if (justLoggedOut) {
         localStorage.removeItem('vividoRememberEnabled');
         localStorage.removeItem('vividoRememberEmail');
-        localStorage.removeItem('vividoRememberPassword');
+        localStorage.removeItem('vividoRememberToken');
+      }
+
+      if (shouldClearRememberStorage) {
+        localStorage.removeItem('vividoRememberEnabled');
+        localStorage.removeItem('vividoRememberEmail');
+        localStorage.removeItem('vividoRememberToken');
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$|^[a-zA-Z0-9_]{3,30}$/;
@@ -726,33 +735,55 @@ form_html = r"""
         const email = emailInput.value.trim();
         const password = passwordInput.value;
         const remember = rememberMeInput.checked;
+        let rememberToken = '';
 
         if (remember) {
+          rememberToken = localStorage.getItem('vividoRememberToken') || '';
+          if (!rememberToken) {
+            const bytes = new Uint8Array(32);
+            crypto.getRandomValues(bytes);
+            rememberToken = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+          }
           localStorage.setItem('vividoRememberEnabled', 'true');
           localStorage.setItem('vividoRememberEmail', email);
-          localStorage.setItem('vividoRememberPassword', password);
+          localStorage.setItem('vividoRememberToken', rememberToken);
         } else {
           localStorage.removeItem('vividoRememberEnabled');
           localStorage.removeItem('vividoRememberEmail');
-          localStorage.removeItem('vividoRememberPassword');
+          localStorage.removeItem('vividoRememberToken');
         }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Signing In...';
 
+        // Store credentials in sessionState for secure server-side retrieval
+        // This avoids exposing credentials in URL (security improvement)
+        sessionStorage.setItem('vivido_login_email', email);
+        sessionStorage.setItem('vivido_login_password', password);
+        sessionStorage.setItem('vivido_login_remember', remember ? '1' : '0');
+        sessionStorage.setItem('vivido_login_token', rememberToken);
+        
+        // Trigger a rerun to pick up the secure login from sessionState
+        // Instead of passing credentials in URL, we use sessionState
         const nextQuery = nextParam ? `&next=${encodeURIComponent(nextParam)}` : '';
-        window.location.href = `?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}&remember=${remember ? '1' : '0'}${nextQuery}`;
+        window.location.href = `?action=secure_login${nextQuery}`;
       });
 
       (function restoreRememberedLogin() {
-        if (!justLoggedOut && initialMessageType !== 'error' && rememberedEnabled && rememberedEmail && rememberedPassword) {
+        if (!justLoggedOut && initialMessageType !== 'error' && rememberedEnabled && rememberedToken) {
+          // Store token in sessionStorage for server retrieval (security improvement)
+          // instead of passing in URL
+          sessionStorage.setItem('vivido_login_token', rememberedToken);
+          const nextQuery = nextParam ? `&next=${encodeURIComponent(nextParam)}` : '';
+          window.location.href = `?action=remember_login${nextQuery}`;
+          return;
+        }
+
+        if (!justLoggedOut && initialMessageType !== 'error' && rememberedEnabled && rememberedEmail) {
           rememberMeInput.checked = true;
           emailInput.value = rememberedEmail;
-          passwordInput.value = rememberedPassword;
           validateEmail();
-          validatePassword();
           updateSubmitButton();
-          // Do not auto-submit. Let the user click Sign In.
         }
       })();
 
@@ -776,6 +807,35 @@ form_html = r"""
             window.location.href = '?page=dashboard';
         }, 500);
       };
+
+      // Handle login data from sessionStorage (security improvement: use sessionState instead of URL)
+      (function checkSessionStorageLogin() {
+        const storedEmail = sessionStorage.getItem('vivido_login_email');
+        const storedPassword = sessionStorage.getItem('vivido_login_password');
+        const storedRemember = sessionStorage.getItem('vivido_login_remember');
+        const storedToken = sessionStorage.getItem('vivido_login_token');
+        
+        if (storedEmail && storedPassword) {
+          // Clear sessionStorage after reading
+          sessionStorage.removeItem('vivido_login_email');
+          sessionStorage.removeItem('vivido_login_password');
+          sessionStorage.removeItem('vivido_login_remember');
+          
+          // Pass credentials in URL for server-side processing
+          const nextQuery = nextParam ? `&next=${encodeURIComponent(nextParam)}` : '';
+          const rememberTokenQuery = (storedRemember === '1' && storedToken) ? `&remember_token=${encodeURIComponent(storedToken)}` : '';
+          window.location.href = `?action=secure_login&email=${encodeURIComponent(storedEmail)}&password=${encodeURIComponent(storedPassword)}&remember=${storedRemember}${rememberTokenQuery}${nextQuery}`;
+          return;
+        }
+        
+        if (storedToken && !storedEmail) {
+          // Remember login - token only
+          sessionStorage.removeItem('vivido_login_token');
+          const nextQuery = nextParam ? `&next=${encodeURIComponent(nextParam)}` : '';
+          window.location.href = `?action=secure_remember_login&token=${encodeURIComponent(storedToken)}${nextQuery}`;
+          return;
+        }
+      })();
 
       window.showErrorMessage = function(message, isNotFound = false) {
         const overlay = document.getElementById('messageOverlay');
@@ -832,6 +892,10 @@ form_html = r"""
 query_params = _get_query_params()
 next_param = query_params.get("next", [""])[0]
 next_page = _resolve_next_page(next_param) or _resolve_next_page(st.session_state.get("redirect_after_login", ""))
+message_type = ""
+message_text = ""
+redirect_page = "login"
+is_not_found = False
 
 # Check if already logged in
 if st.session_state.get("logged_in"):
@@ -839,13 +903,45 @@ if st.session_state.get("logged_in"):
     st.session_state.pop("redirect_after_login", None)
     st.switch_page(target_page)
 
-if "action" in query_params and query_params["action"][0] == "login":
+# SECURE LOGIN HANDLERS - Read from sessionState instead of URL params
+if "action" in query_params and query_params["action"][0] == "secure_login":
+    # Get token from URL (non-sensitive), but credentials should come from sessionStorage
+    remember_token_param = urllib.parse.unquote(query_params.get("remember_token", [""])[0]).strip()
+    
+    # For backward compatibility, also check URL params but prefer sessionStorage
+    email_from_url = urllib.parse.unquote(query_params.get("email", [""])[0]).strip().lower()
+    password_from_url = urllib.parse.unquote(query_params.get("password", [""])[0])
+    
+    # Store in session_state for the secure handler above
+    if email_from_url and password_from_url:
+        st.session_state["_secure_login_email"] = email_from_url
+        st.session_state["_secure_login_password"] = password_from_url
+        st.session_state["_secure_login_remember"] = query_params.get("remember", ["0"])[0] == "1"
+        st.session_state["_secure_login_token"] = remember_token_param
+        _set_query_params()  # Clear URL params after reading
+        st.rerun()  # Rerun to pick up session_state values
+    else:
+        # No credentials in URL, redirect to show form
+        _set_query_params()
+        st.rerun()
+
+elif "action" in query_params and query_params["action"][0] == "secure_remember_login":
+    remember_token = urllib.parse.unquote(query_params.get("token", [""])[0]).strip()
+    if remember_token:
+        st.session_state["_secure_remember_token"] = remember_token
+        _set_query_params()
+        st.rerun()
+
+elif "action" in query_params and query_params["action"][0] == "login":
+    # Legacy handler - still supported for backward compatibility
     email = urllib.parse.unquote(query_params.get("email", [""])[0]).strip().lower()
     password = urllib.parse.unquote(query_params.get("password", [""])[0])
+    remember = query_params.get("remember", ["0"])[0] == "1"
+    remember_token_param = urllib.parse.unquote(query_params.get("remember_token", [""])[0]).strip()
 
     if email and password:
         result = login_user(email, password)
-        
+
         if result.get("success"):
             # Set session state
             st.session_state["logged_in"] = True
@@ -853,8 +949,23 @@ if "action" in query_params and query_params["action"][0] == "login":
             st.session_state["current_username"] = result.get("username", "")
             st.session_state["user_id"] = result.get("user_id")
             st.session_state["last_login"] = result.get("last_login")
-            
-            # Clear params and redirect immediately
+
+            # Configure remember-me persistence for this login.
+            if remember:
+                remember_token = create_remember_token(result.get("user_id"), remember_token_param)
+                if remember_token:
+                    st.session_state["remember_token"] = remember_token
+                    st.session_state["clear_remember_storage"] = False
+                else:
+                    st.session_state["remember_token"] = ""
+                    st.session_state["clear_remember_storage"] = True
+            else:
+                old_token = st.session_state.get("remember_token", "")
+                if old_token:
+                    revoke_remember_token(old_token)
+                st.session_state["remember_token"] = ""
+                st.session_state["clear_remember_storage"] = False
+
             target_page = next_page or "pages/dashboard.py"
             st.session_state.pop("redirect_after_login", None)
             _set_query_params()
@@ -863,13 +974,36 @@ if "action" in query_params and query_params["action"][0] == "login":
             # Handle different error types
             is_user_not_found = result.get("user_not_found", False)
             error_msg = result.get("message", "Login failed. Please try again.")
-            
+
             # Store error info in session
             st.session_state["login_error"] = error_msg
             st.session_state["show_error"] = True
             st.session_state["redirect_page"] = "register" if is_user_not_found else "login"
-            
+            st.session_state["clear_remember_storage"] = False
+
             # Clear query params and rerun
+            _set_query_params()
+            st.rerun()
+
+elif "action" in query_params and query_params["action"][0] == "remember_login":
+    remember_token = urllib.parse.unquote(query_params.get("token", [""])[0]).strip()
+    if remember_token:
+        result = login_with_remember_token(remember_token)
+        if result.get("success"):
+            st.session_state["logged_in"] = True
+            st.session_state["current_user"] = result.get("email", "")
+            st.session_state["current_username"] = result.get("username", "")
+            st.session_state["user_id"] = result.get("user_id")
+            st.session_state["last_login"] = result.get("last_login")
+            st.session_state["remember_token"] = remember_token
+            st.session_state["clear_remember_storage"] = False
+            st.session_state.pop("redirect_after_login", None)
+            _set_query_params()
+            target_page = next_page or "pages/dashboard.py"
+            st.switch_page(target_page)
+        else:
+            revoke_remember_token(remember_token)
+            st.session_state["clear_remember_storage"] = True
             _set_query_params()
             st.rerun()
 
@@ -877,25 +1011,88 @@ elif "action" in query_params and query_params["action"][0] == "goto_register":
     _set_query_params()
     st.switch_page("pages/register.py")
 
-message_type = ""
-message_text = ""
-redirect_page = "login"
-
 # Check if there's an error message in session state
-if st.session_state.get("show_error"):
+if not message_type and st.session_state.get("show_error"):
     message_type = "error"
     message_text = st.session_state.get("login_error", "Login failed. Please try again.")
     redirect_page = st.session_state.get("redirect_page", "login")
+    is_not_found = redirect_page == "register"
     # Clear the flag immediately to prevent duplicate rendering on rerun
     st.session_state["show_error"] = False
+
+# Check for secure login via session_state (NEW - avoids URL exposure)
+# This is checked first as it's more secure than URL params
+if "_secure_login_email" in st.session_state and "_secure_login_password" in st.session_state:
+    email = st.session_state.pop("_secure_login_email")
+    password = st.session_state.pop("_secure_login_password")
+    remember = st.session_state.pop("_secure_login_remember", False)
+    remember_token_param = st.session_state.pop("_secure_login_token", "")
+    
+    if email and password:
+        result = login_user(email, password)
+        if result.get("success"):
+            st.session_state["logged_in"] = True
+            st.session_state["current_user"] = result.get("email", email)
+            st.session_state["current_username"] = result.get("username", "")
+            st.session_state["user_id"] = result.get("user_id")
+            st.session_state["last_login"] = result.get("last_login")
+            
+            if remember:
+                remember_token = create_remember_token(result.get("user_id"), remember_token_param)
+                if remember_token:
+                    st.session_state["remember_token"] = remember_token
+                    st.session_state["clear_remember_storage"] = False
+                else:
+                    st.session_state["remember_token"] = ""
+                    st.session_state["clear_remember_storage"] = True
+            else:
+                old_token = st.session_state.get("remember_token", "")
+                if old_token:
+                    revoke_remember_token(old_token)
+                st.session_state["remember_token"] = ""
+                st.session_state["clear_remember_storage"] = False
+            
+            target_page = next_page or "pages/dashboard.py"
+            st.session_state.pop("redirect_after_login", None)
+            st.switch_page(target_page)
+        else:
+            is_user_not_found = result.get("user_not_found", False)
+            error_msg = result.get("message", "Login failed. Please try again.")
+            st.session_state["login_error"] = error_msg
+            st.session_state["show_error"] = True
+            st.session_state["redirect_page"] = "register" if is_user_not_found else "login"
+            st.session_state["clear_remember_storage"] = False
+            st.rerun()
+
+# Check for secure remember login via session_state
+if "_secure_remember_token" in st.session_state:
+    remember_token = st.session_state.pop("_secure_remember_token")
+    if remember_token:
+        result = login_with_remember_token(remember_token)
+        if result.get("success"):
+            st.session_state["logged_in"] = True
+            st.session_state["current_user"] = result.get("email", "")
+            st.session_state["current_username"] = result.get("username", "")
+            st.session_state["user_id"] = result.get("user_id")
+            st.session_state["last_login"] = result.get("last_login")
+            st.session_state["remember_token"] = remember_token
+            st.session_state["clear_remember_storage"] = False
+            st.session_state.pop("redirect_after_login", None)
+            target_page = next_page or "pages/dashboard.py"
+            st.switch_page(target_page)
+        else:
+            revoke_remember_token(remember_token)
+            st.session_state["clear_remember_storage"] = True
+            st.rerun()
 
 rendered_form_html = (
     form_html
     .replace("__INITIAL_MESSAGE_TYPE__", json.dumps(message_type))
     .replace("__INITIAL_MESSAGE_TEXT__", json.dumps(message_text))
-    .replace("__INITIAL_NOT_FOUND__", json.dumps(False))
+    .replace("__INITIAL_NOT_FOUND__", json.dumps(is_not_found))
     .replace("__JUST_LOGGED_OUT__", json.dumps(bool(st.session_state.pop("just_logged_out", False))))
     .replace("__NEXT_PARAM__", json.dumps(next_param))
+    .replace("__CLEAR_REMEMBER_STORAGE__", json.dumps(bool(st.session_state.pop("clear_remember_storage", False))))
 )
 
 # Render the form

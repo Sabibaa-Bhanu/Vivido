@@ -8,20 +8,21 @@ def render_welcome_page() -> None:
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --primary: #06b6d4;
-  --secondary: #7c3aed;
+  --primary: #7c3aed;
+  --primary-light: #a78bfa;
+  --secondary: #06b6d4;
   --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --card-bg: rgba(15, 23, 42, 0.55);
-  --card-border: rgba(148, 163, 184, 0.28);
-  --glow-strong: rgba(6, 182, 212, 0.45);
+  --text-secondary: #94a3b8;
+  --card-bg: rgba(18, 9, 31, 0.55);
+  --card-border: rgba(124, 58, 237, 0.28);
+  --glow-strong: rgba(124, 58, 237, 0.45);
   --glow-soft: rgba(124, 58, 237, 0.35);
 }
 
 * { font-family: 'Poppins', sans-serif; }
 
 .stApp {
-  background: linear-gradient(135deg, #0b1224 0%, #140e2a 50%, #0b1224 100%);
+  background: linear-gradient(135deg, #0b0e1a 0%, #12091f 50%, #0b0e1a 100%);
   color: var(--text-primary);
 }
 
@@ -30,9 +31,9 @@ def render_welcome_page() -> None:
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(circle at 12% 18%, rgba(6, 182, 212, 0.2), transparent 45%),
+    radial-gradient(circle at 12% 18%, rgba(124, 58, 237, 0.2), transparent 45%),
     radial-gradient(circle at 88% 12%, rgba(124, 58, 237, 0.18), transparent 40%),
-    radial-gradient(circle at 50% 80%, rgba(6, 182, 212, 0.12), transparent 45%);
+    radial-gradient(circle at 50% 80%, rgba(124, 58, 237, 0.12), transparent 45%);
   animation: glowShift 12s ease-in-out infinite;
   pointer-events: none;
   z-index: 0;
@@ -69,7 +70,7 @@ def render_welcome_page() -> None:
   inset: -2px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(6, 182, 212, 0.18), rgba(124, 58, 237, 0.2));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(124, 58, 237, 0.22), rgba(124, 58, 237, 0.2));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -82,7 +83,7 @@ def render_welcome_page() -> None:
   inset: 0;
   background:
     radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.08), transparent 55%),
-    radial-gradient(circle at 82% 25%, rgba(6, 182, 212, 0.1), transparent 55%);
+    radial-gradient(circle at 82% 25%, rgba(124, 58, 237, 0.12), transparent 55%);
   animation: cardGlow 12s ease-in-out infinite;
   pointer-events: none;
 }
@@ -105,7 +106,7 @@ def render_welcome_page() -> None:
   text-transform: uppercase;
   margin-bottom: 1.2rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 6px 18px rgba(6, 182, 212, 0.2);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.2);
 }
 
 .title {
@@ -113,7 +114,7 @@ def render_welcome_page() -> None:
   font-weight: 700;
   margin: 0 0 0.75rem;
   color: var(--text-primary);
-  text-shadow: 0 8px 24px rgba(6, 182, 212, 0.1);
+  text-shadow: 0 8px 24px rgba(124, 58, 237, 0.15);
 }
 
 .subtitle {
@@ -159,16 +160,16 @@ def render_welcome_page() -> None:
 }
 
 .cta-row .cta-primary {
-  border-color: rgba(6, 182, 212, 0.55);
-  color: #e6fbff;
-  box-shadow: 0 18px 40px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  border-color: rgba(124, 58, 237, 0.55);
+  color: #f0e6ff;
+  box-shadow: 0 18px 40px rgba(124, 58, 237, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .cta-row .cta-primary::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(6, 182, 212, 0.18), rgba(124, 58, 237, 0.18));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(124, 58, 237, 0.2), rgba(124, 58, 237, 0.18));
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -183,7 +184,7 @@ def render_welcome_page() -> None:
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(124, 58, 237, 0.15));
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(124, 58, 237, 0.15));
   opacity: 0;
   transition: opacity 0.25s ease;
 }

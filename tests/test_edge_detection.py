@@ -1,12 +1,15 @@
 import cv2
 import numpy as np
+from pathlib import Path
 
 from utils.edge_detection import (
     EdgeParams,
     compare_original_and_edges,
     detect_cartoon_edges,
+    detect_cartoon_edges_from_path,
     detect_edges_adaptive,
     detect_edges_canny,
+    optimal_settings_documentation,
     recommended_params,
 )
 
@@ -117,3 +120,21 @@ def test_dispatcher_respects_method():
     assert canny_edges.shape == adaptive_edges.shape == image.shape[:2]
     assert int(np.abs(canny_edges.astype(np.int16) - adaptive_edges.astype(np.int16)).sum()) > 0
 
+
+def test_detect_cartoon_edges_from_path_uses_presets(tmp_path: Path):
+    image = _object_like_image()
+    image_path = tmp_path / "object_sample.png"
+    assert cv2.imwrite(str(image_path), image)
+
+    edges = detect_cartoon_edges_from_path(str(image_path), image_type="object")
+    assert edges.ndim == 2
+    assert edges.shape == image.shape[:2]
+    assert int(np.count_nonzero(edges)) > 0
+
+
+def test_optimal_settings_documentation_contains_required_profiles():
+    docs = optimal_settings_documentation()
+    assert set(docs.keys()) == {"portrait", "landscape", "object"}
+    assert docs["portrait"]["method"] == "adaptive"
+    assert docs["landscape"]["method"] == "canny"
+    assert docs["object"]["method"] == "canny"
